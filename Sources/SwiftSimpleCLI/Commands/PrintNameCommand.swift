@@ -1,5 +1,7 @@
 import Commandant
+import Foundation
 import Result
+import SwiftSyntax
 
 struct PrintNameCommand: CommandProtocol {
     typealias Options = PrintNameOptions
@@ -8,6 +10,13 @@ struct PrintNameCommand: CommandProtocol {
     let function: String = "Prints names of types declared in the file"
 
     func run(_ options: Options) -> Result<(), MainError> {
+        guard let url = URL(string: options.path), let parser = try? SyntaxTreeParser.parse(url) else {
+            return Result(error: .fatalError(description: "Could not parse Swift file at \(options.path) path"))
+        }
+
+        let visitor = TokenVisitor()
+        visitor.visit(parser)
+
         return Result(value: ())
     }
 }
@@ -23,4 +32,24 @@ struct PrintNameOptions: OptionsProtocol {
         return create
             <*> m <| Argument(usage: "the swift file to read")
     }
+}
+
+class TokenVisitor: SyntaxVisitor {
+
+    private var nextIdentifierType: String?
+
+    override func visit(_ token: TokenSyntax) {
+        switch token.tokenKind {
+        case .classKeyword, .extensionKeyword:
+            nextIdentifierType = token.text
+        case let .identifier(identifier):
+            if let identifierType = nextIdentifierType {
+                nextIdentifierType = nil
+                print("\(identifierType) \(identifier)")
+            }
+        default:
+            break
+        }
+    }
+
 }

@@ -1,7 +1,16 @@
 import Commandant
 import Foundation
 
-enum MainError: Error {}
+enum MainError: Error, LocalizedError {
+    case fatalError(description: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .fatalError(message):
+            return message
+        }
+    }
+}
 
 let registry = CommandRegistry<MainError>()
 registry.register(PrintNameCommand())

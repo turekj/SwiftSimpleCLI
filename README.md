@@ -6,4 +6,6 @@
 4. `swift package generate-xcodeproj`
 5. Add `swift-syntax` & `Commandant` to `Package.swift`.
 6. `swift package generate-xcodeproj` again
-7. 
+7. Write the empty main with help command.
+8. Write 1st command stub.
+9. 
