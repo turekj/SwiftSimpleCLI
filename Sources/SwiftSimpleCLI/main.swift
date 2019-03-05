@@ -14,6 +14,7 @@ enum MainError: Error, LocalizedError {
 
 let registry = CommandRegistry<MainError>()
 registry.register(PrintNameCommand())
+registry.register(GenerateMockCommand())
 
 let helpCommand = HelpCommand(registry: registry)
 registry.register(helpCommand)
