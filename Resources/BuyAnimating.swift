@@ -1,6 +1,6 @@
 import UIKit
 
-protocol HelloWorld: Mocking {
+protocol HelloWorld: AnyConformance, Mocking {
     func greet(person: String) -> String
     func bye(person: String) -> String
 }

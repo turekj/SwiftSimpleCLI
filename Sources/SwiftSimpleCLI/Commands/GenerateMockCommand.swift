@@ -18,11 +18,13 @@ struct GenerateMockCommand: CommandProtocol {
         let visitor = GenerateMockTokenVisitor()
         visitor.visit(parser)
 
-        print(visitor.parsedProtocols)
+        var protocolParser = ProtocolParser(index: 0, tokens: visitor.tokens)
 
         do {
+            let parsed = try protocolParser.parse()
             try Path(options.outputPath).write(Data("Hello world".utf8))
-        } catch {
+        } catch let error {
+            print(error)
             return Result(error: .fatalError(description: "Could not write output to \(options.outputPath) file"))
         }
 
@@ -49,84 +51,21 @@ struct GenerateMockOptions: OptionsProtocol {
 
 class GenerateMockTokenVisitor: SyntaxVisitor {
 
-    private var protocolOpened: Bool = false
-    private var protocolName: String?
-    private var protocolColon: Bool = false
-    private var isMocking: Bool = false
-    private var functionOpened: Bool = false
-    private var functionName: String?
-    private var argumentOpened: Bool = false
-    private var argumentTypeOpened: Bool = false
-    private var argumentName: String?
-    private var argumentType: String?
-
-    var parsedProtocols: [ProtocolDescriptor] = []
-    var parsedFunctions: [FunctionDescriptor] = []
-    var parsedArguments: [ArgumentDescriptor] = []
+    var tokens: [TokenKind] = []
 
     override func visit(_ token: TokenSyntax) {
         switch token.tokenKind {
-        case .protocolKeyword:
-            protocolOpened = true
-            protocolName = nil
-            parsedFunctions = []
-        case let .identifier(identifier):
-            if protocolOpened && protocolName == nil {
-                protocolName = identifier
-            } else if protocolColon {
-                isMocking = isMocking || identifier == "Mocking"
-            } else if functionOpened && functionName == nil {
-                functionName = identifier
-            } else if argumentOpened && argumentName == nil && !argumentTypeOpened {
-                argumentName = identifier
-            } else if argumentTypeOpened {
-                argumentType = identifier
-            }
-        case .colon:
-            if protocolOpened && !argumentOpened {
-                protocolColon = true
-            } else if argumentOpened {
-                argumentTypeOpened = true
-            }
-        case .leftBrace:
-            protocolColon = false
-        case .rightBrace:
-            if let protocolName = protocolName, isMocking {
-                self.protocolName = nil
-                protocolOpened = false
-                protocolColon = false
-                isMocking = false
-                parsedProtocols.append(ProtocolDescriptor(name: protocolName, functions: parsedFunctions))
-                parsedFunctions = []
-            }
-        case .funcKeyword:
-            functionOpened = true
-            functionName = nil
-        case .leftParen:
-            if functionOpened {
-                argumentOpened = true
-                argumentTypeOpened = false
-            }
-        case .rightParen:
-            if let functionName = functionName, functionOpened {
-                if let argumentName = argumentName, let argumentType = argumentType, argumentOpened {
-                    self.argumentName = nil
-                    argumentOpened = false
-                    argumentTypeOpened = false
-                    parsedArguments.append(ArgumentDescriptor(name: argumentName, type: argumentType))
-                }
-
-                self.functionName = nil
-                functionOpened = false
-                parsedFunctions.append(FunctionDescriptor(name: functionName, arguments: parsedArguments))
-                parsedArguments = []
-            }
-        case .comma:
-            if let argumentName = argumentName, let argumentType = argumentType, argumentOpened {
-                self.argumentName = nil
-                argumentTypeOpened = false
-                parsedArguments.append(ArgumentDescriptor(name: argumentName, type: argumentType))
-            }
+        case .protocolKeyword,
+             .colon,
+             .leftBrace,
+             .rightBrace,
+             .leftParen,
+             .rightParen,
+             .funcKeyword,
+             .comma,
+             .arrow,
+             .identifier:
+            tokens.append(token.tokenKind)
         default:
             break
         }
@@ -134,17 +73,182 @@ class GenerateMockTokenVisitor: SyntaxVisitor {
 
 }
 
-struct ProtocolDescriptor {
-    let name: String
-    let functions: [FunctionDescriptor]
+enum ParsingError: Error {
+    case invalid
 }
 
-struct FunctionDescriptor {
-    let name: String
-    let arguments: [ArgumentDescriptor]
+struct ProtocolParser {
+
+    var index: Int = 0
+    let tokens: [TokenKind]
+
+    mutating func pop() -> TokenKind {
+        defer { index += 1 }
+        return tokens[index]
+    }
+
+    func peek() -> TokenKind {
+        return tokens[index]
+    }
+
+    var hasTokens: Bool {
+        return index < tokens.count
+    }
+
+    mutating func parse() throws -> [ProtocolExpression] {
+        var protocols: [ProtocolExpression] = []
+
+        while hasTokens {
+            if let `protocol` = try? parseProtocol() {
+                protocols.append(`protocol`)
+            }
+        }
+
+        return protocols
+    }
+
+    mutating func parseProtocol() throws -> ProtocolExpression {
+        guard case .protocolKeyword = pop() else {
+            throw ParsingError.invalid
+        }
+
+        let name = try parseIdentifier()
+        var conformances: [String] = []
+
+        if case .colon = peek() {
+            conformances = try parseProtocolConformances()
+        }
+
+        guard case .leftBrace = pop() else {
+            throw ParsingError.invalid
+        }
+
+        var functions: [FunctionExpression] = []
+
+        functionsLoop: while true {
+            switch peek() {
+            case .funcKeyword:
+                functions.append(try parseFunction())
+            case .rightBrace:
+                break functionsLoop
+            default:
+                throw ParsingError.invalid
+            }
+        }
+
+        guard case .rightBrace = pop() else {
+            throw ParsingError.invalid
+        }
+
+        return ProtocolExpression(name: name, functions: functions, conformances: conformances)
+    }
+
+    mutating func parseProtocolConformances() throws -> [String] {
+        guard case .colon = pop() else {
+            throw ParsingError.invalid
+        }
+
+        var conformances: [String] = []
+
+        conformancesLoop: while true {
+            switch peek() {
+            case .comma:
+                _ = pop()
+            case .identifier:
+                conformances.append(try parseIdentifier())
+            case .leftBrace:
+                break conformancesLoop
+            default:
+                throw ParsingError.invalid
+            }
+        }
+
+        return conformances
+    }
+
+    mutating func parseFunction() throws -> FunctionExpression {
+        guard case .funcKeyword = pop() else {
+            throw ParsingError.invalid
+        }
+
+        let name = try parseIdentifier()
+
+        guard case .leftParen = pop() else {
+            throw ParsingError.invalid
+        }
+
+        var arguments: [ArgumentExpression] = []
+
+        argumentsLoop: while true {
+            switch peek() {
+            case .comma:
+                _ = pop()
+            case .identifier:
+                arguments.append(try parseArgument())
+            case .rightParen:
+                break argumentsLoop
+            default:
+                throw ParsingError.invalid
+            }
+        }
+
+        guard case .rightParen = pop() else {
+            throw ParsingError.invalid
+        }
+
+        var returnType = "Void"
+
+        if case .arrow = peek() {
+            _ = pop()
+            returnType = try parseType()
+        }
+
+        return FunctionExpression(name: name, arguments: arguments, returnType: returnType)
+    }
+
+    mutating func parseArgument() throws -> ArgumentExpression {
+        let name = try parseIdentifier()
+
+        guard case .colon = pop() else {
+            throw ParsingError.invalid
+        }
+
+        let type = try parseType()
+
+        return ArgumentExpression(name: name, type: type)
+    }
+
+    mutating func parseIdentifier() throws -> String {
+        guard case let .identifier(identifier) = pop() else {
+            throw ParsingError.invalid
+        }
+
+        return identifier
+    }
+
+    mutating func parseType() throws -> String {
+        return try parseIdentifier()
+    }
 }
 
-struct ArgumentDescriptor {
+struct Token {
+    let type: TokenKind
+    let identifier: String?
+}
+
+struct ProtocolExpression {
+    let name: String
+    let functions: [FunctionExpression]
+    let conformances: [String]
+}
+
+struct FunctionExpression {
+    let name: String
+    let arguments: [ArgumentExpression]
+    let returnType: String
+}
+
+struct ArgumentExpression {
     let name: String
     let type: String
 }
