@@ -2,6 +2,7 @@ import Commandant
 import Foundation
 import Result
 import SwiftSyntax
+import PathKit
 
 struct GenerateMockCommand: CommandProtocol {
     typealias Options = GenerateMockOptions
@@ -10,6 +11,12 @@ struct GenerateMockCommand: CommandProtocol {
     let function: String = "Creates a mock for the Mocking protocol"
 
     func run(_ options: Options) -> Result<(), MainError> {
+        do {
+            try Path(options.outputPath).write(Data("Hello world".utf8))
+        } catch {
+            return Result(error: .fatalError(description: "Could not write output to \(options.outputPath) file"))
+        }
+
         return Result(value: ())
     }
 }

@@ -9,4 +9,7 @@
 7. Write the empty main with help command.
 8. Write 1st command stub.
 9. Implement working `PrintNameCommand`.
-10. 
+10. Add `PathKit` to `Package.swift`.
+11.
+
+
