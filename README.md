@@ -8,4 +8,5 @@
 6. `swift package generate-xcodeproj` again
 7. Write the empty main with help command.
 8. Write 1st command stub.
-9. 
+9. Implement working `PrintNameCommand`.
+10. 
