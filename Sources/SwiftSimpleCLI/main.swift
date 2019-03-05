@@ -4,6 +4,7 @@ import Foundation
 enum MainError: Error {}
 
 let registry = CommandRegistry<MainError>()
+registry.register(PrintNameCommand())
 
 let helpCommand = HelpCommand(registry: registry)
 registry.register(helpCommand)
