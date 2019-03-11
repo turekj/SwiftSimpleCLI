@@ -24,10 +24,10 @@ struct GenerateMockCommand: CommandProtocol {
             let parsed = try protocolParser.parse()
             let generator = MockGenerator()
 
-            for each in generator.generateMock(for: parsed) {
-                print(each)
-            }
-            try Path(options.outputPath).write(Data("Hello world".utf8))
+            let mocks = generator.generateMock(for: parsed).map { $0.description }.joined()
+            print(mocks)
+
+            try Path(options.outputPath).write(Data(mocks.utf8))
         } catch let error {
             print(error)
             return Result(error: .fatalError(description: "Could not write output to \(options.outputPath) file"))
@@ -270,9 +270,10 @@ class MockGenerator {
 
         let classMembers = MemberDeclBlockSyntax { builder in
             builder.useLeftBrace(SyntaxFactory.makeLeftBraceToken(trailingTrivia: .newlines(2)))
+            proto.functions.compactMap { $0.propertyReturnValueSyntax }.forEach { builder.addDecl($0) }
             proto.functions.forEach { builder.addDecl($0.propertyCallSyntax) }
             proto.functions.forEach { builder.addDecl($0.functionSyntax) }
-            builder.useRightBrace(SyntaxFactory.makeRightBraceToken(leadingTrivia: .newlines(1), trailingTrivia: .newlines(1)))
+            builder.useRightBrace(SyntaxFactory.makeRightBraceToken(leadingTrivia: .newlines(1), trailingTrivia: .newlines(2)))
         }
 
         return ClassDeclSyntax { builder in
@@ -300,6 +301,41 @@ extension ArgumentExpression {
 }
 
 extension FunctionExpression {
+
+    var propertyReturnValueSyntax: VariableDeclSyntax? {
+        guard returnType != "Void" else {
+            return nil
+        }
+
+        let modifiers = SyntaxFactory.makeDeclModifier(
+            name: SyntaxFactory.makePrivateKeyword(leadingTrivia: .spaces(4), trailingTrivia: .spaces(1)),
+            detail: nil
+        )
+
+        let identifier = SyntaxFactory.makeIdentifierPattern(
+            identifier: SyntaxFactory.makeIdentifier(name + "ReturnValue", leadingTrivia: .spaces(1))
+        )
+
+        let type = SyntaxFactory.makeTypeAnnotation(
+            colon: SyntaxFactory.makeColonToken(),
+            type: SyntaxFactory.makeTypeIdentifier("\(returnType)!", leadingTrivia: .spaces(1), trailingTrivia: .newlines(1))
+        )
+
+        let patternBinding = SyntaxFactory.makePatternBinding(
+            pattern: identifier,
+            typeAnnotation: type,
+            initializer: nil,
+            accessor: nil,
+            trailingComma: nil
+        )
+
+        return SyntaxFactory.makeVariableDecl(
+            attributes: nil,
+            modifiers: SyntaxFactory.makeModifierList([modifiers]),
+            letOrVarKeyword: SyntaxFactory.makeVarKeyword(),
+            bindings: SyntaxFactory.makePatternBindingList([patternBinding])
+        )
+    }
 
     var propertyCallSyntax: VariableDeclSyntax {
         var propertyType = ""
@@ -375,10 +411,22 @@ extension FunctionExpression {
             builder.useItem(SyntaxFactory.makeUnknown(functionCallBlock, leadingTrivia: .spaces(8), trailingTrivia: .newlines(1)))
         }
 
+        var returnBlockItem: CodeBlockItemSyntax? = nil
+
+        if returnType != "Void" {
+            returnBlockItem = CodeBlockItemSyntax { builder in
+                builder.useItem(SyntaxFactory.makeUnknown("return \(name)ReturnValue", leadingTrivia: [.newlines(1), .spaces(8)], trailingTrivia: .newlines(1)))
+            }
+        }
+
         let codeBlock = CodeBlockSyntax { builder in
             builder.useLeftBrace(SyntaxFactory.makeLeftBraceToken(trailingTrivia: .newlines(1)))
             builder.useRightBrace(SyntaxFactory.makeRightBraceToken(leadingTrivia: .spaces(4), trailingTrivia: .newlines(1)))
             builder.addCodeBlockItem(blockItem)
+
+            if let returnBlockItem = returnBlockItem {
+                builder.addCodeBlockItem(returnBlockItem)
+            }
         }
 
         let functionDeclaration = FunctionDeclSyntax { builder in
