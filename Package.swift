@@ -5,6 +5,10 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftSimpleCLI",
+    products: [
+        .executable(name: "SwiftSimpleCLI", targets: ["SwiftSimpleCLI"]),
+        .library(name: "SwiftSimpleCLIFramework", targets: ["SwiftSimpleCLIFramework"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-syntax.git", .exact("0.40200.0")),
         .package(url: "https://github.com/Carthage/Commandant.git", .exact("0.15.0")),
@@ -15,9 +19,12 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages which this package depends on.
         .target(
             name: "SwiftSimpleCLI",
-            dependencies: ["Commandant", "SwiftSyntax", "PathKit"]),
+            dependencies: ["SwiftSimpleCLIFramework", "Commandant"]),
+        .target(
+            name: "SwiftSimpleCLIFramework",
+            dependencies: ["SwiftSyntax", "PathKit"]),
         .testTarget(
-            name: "SwiftSimpleCLITests",
-            dependencies: ["SwiftSimpleCLI"]),
+            name: "SwiftSimpleCLIFrameworkTests",
+            dependencies: ["SwiftSimpleCLIFramework"]),
     ]
 )

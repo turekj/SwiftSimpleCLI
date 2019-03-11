@@ -4,13 +4,13 @@ import Result
 import SwiftSyntax
 import PathKit
 
-struct GenerateMockCommand: CommandProtocol {
-    typealias Options = GenerateMockOptions
+public struct GenerateMockCommand: CommandProtocol {
+    public typealias Options = GenerateMockOptions
 
-    let verb: String = "generate_mock"
-    let function: String = "Creates a mock for the Mocking protocol"
+    public let verb: String = "generate_mock"
+    public let function: String = "Creates a mock for the Mocking protocol"
 
-    func run(_ options: Options) -> Result<(), MainError> {
+    public func run(_ options: Options) -> Result<(), MainError> {
         guard let url = URL(string: options.inputPath), let parser = try? SyntaxTreeParser.parse(url) else {
             return Result(error: .fatalError(description: "Could not parse Swift file at \(options.inputPath) path"))
         }
@@ -35,30 +35,32 @@ struct GenerateMockCommand: CommandProtocol {
 
         return Result(value: ())
     }
+
+    public init() {}
 }
 
-struct GenerateMockOptions: OptionsProtocol {
-    let inputPath: String
-    let outputPath: String
+public struct GenerateMockOptions: OptionsProtocol {
+    public let inputPath: String
+    public let outputPath: String
 
-    static func create(_ inputPath: String) -> (String) -> GenerateMockOptions {
+    public static func create(_ inputPath: String) -> (String) -> GenerateMockOptions {
         return { outputPath in
             GenerateMockOptions(inputPath: inputPath, outputPath: outputPath)
         }
     }
 
-    static func evaluate(_ m: CommandMode) -> Result<GenerateMockOptions, CommandantError<MainError>> {
+    public static func evaluate(_ m: CommandMode) -> Result<GenerateMockOptions, CommandantError<MainError>> {
         return create
             <*> m <| Argument(usage: "the swift file to mock")
             <*> m <| Argument(usage: "the output file path")
     }
 }
 
-class GenerateMockTokenVisitor: SyntaxVisitor {
+public class GenerateMockTokenVisitor: SyntaxVisitor {
 
-    var tokens: [TokenKind] = []
+    public var tokens: [TokenKind] = []
 
-    override func visit(_ token: TokenSyntax) {
+    override public func visit(_ token: TokenSyntax) {
         switch token.tokenKind {
         case .protocolKeyword,
              .colon,
@@ -78,14 +80,19 @@ class GenerateMockTokenVisitor: SyntaxVisitor {
 
 }
 
-enum ParsingError: Error {
+public enum ParsingError: Error {
     case invalid
 }
 
-struct ProtocolParser {
+public struct ProtocolParser {
 
     var index: Int = 0
     let tokens: [TokenKind]
+
+    public init(index: Int, tokens: [TokenKind]) {
+        self.index = index
+        self.tokens = tokens
+    }
 
     mutating func pop() -> TokenKind {
         defer { index += 1 }
@@ -100,7 +107,7 @@ struct ProtocolParser {
         return index < tokens.count
     }
 
-    mutating func parse() throws -> [ProtocolExpression] {
+    public mutating func parse() throws -> [ProtocolExpression] {
         var protocols: [ProtocolExpression] = []
 
         while hasTokens {
@@ -236,26 +243,26 @@ struct ProtocolParser {
     }
 }
 
-struct Token {
-    let type: TokenKind
-    let identifier: String?
+public struct Token: Equatable {
+    public let type: TokenKind
+    public let identifier: String?
 }
 
-struct ProtocolExpression {
-    let name: String
-    let functions: [FunctionExpression]
-    let conformances: [String]
+public struct ProtocolExpression: Equatable {
+    public let name: String
+    public let functions: [FunctionExpression]
+    public let conformances: [String]
 }
 
-struct FunctionExpression {
-    let name: String
-    let arguments: [ArgumentExpression]
-    let returnType: String
+public struct FunctionExpression: Equatable {
+    public let name: String
+    public let arguments: [ArgumentExpression]
+    public let returnType: String
 }
 
-struct ArgumentExpression {
-    let name: String
-    let type: String
+public struct ArgumentExpression: Equatable {
+    public let name: String
+    public let type: String
 }
 
 class MockGenerator {

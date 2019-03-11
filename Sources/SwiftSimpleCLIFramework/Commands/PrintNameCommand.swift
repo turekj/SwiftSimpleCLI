@@ -3,13 +3,13 @@ import Foundation
 import Result
 import SwiftSyntax
 
-struct PrintNameCommand: CommandProtocol {
-    typealias Options = PrintNameOptions
+public struct PrintNameCommand: CommandProtocol {
+    public typealias Options = PrintNameOptions
 
-    let verb: String = "print_name"
-    let function: String = "Prints names of types declared in the file"
+    public let verb: String = "print_name"
+    public let function: String = "Prints names of types declared in the file"
 
-    func run(_ options: Options) -> Result<(), MainError> {
+    public func run(_ options: Options) -> Result<(), MainError> {
         guard let url = URL(string: options.path), let parser = try? SyntaxTreeParser.parse(url) else {
             return Result(error: .fatalError(description: "Could not parse Swift file at \(options.path) path"))
         }
@@ -19,16 +19,18 @@ struct PrintNameCommand: CommandProtocol {
 
         return Result(value: ())
     }
+
+    public init() {}
 }
 
-struct PrintNameOptions: OptionsProtocol {
-    let path: String
+public struct PrintNameOptions: OptionsProtocol {
+    public let path: String
 
-    static func create(_ path: String) -> PrintNameOptions {
+    public static func create(_ path: String) -> PrintNameOptions {
         return PrintNameOptions(path: path)
     }
 
-    static func evaluate(_ m: CommandMode) -> Result<PrintNameOptions, CommandantError<MainError>> {
+    public static func evaluate(_ m: CommandMode) -> Result<PrintNameOptions, CommandantError<MainError>> {
         return create
             <*> m <| Argument(usage: "the swift file to read")
     }
