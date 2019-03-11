@@ -387,7 +387,7 @@ extension FunctionExpression {
     var functionSyntax: FunctionDeclSyntax {
         let inputSyntax = ParameterClauseSyntax { builder in
             builder.useLeftParen(SyntaxFactory.makeLeftParenToken())
-            builder.useRightParen(SyntaxFactory.makeRightParenToken(trailingTrivia: .spaces(1)))
+            builder.useRightParen(SyntaxFactory.makeRightParenToken())
             arguments.enumerated().forEach { offset, argument in
                 builder.addFunctionParameter(argument.syntax(isLast: offset == arguments.count - 1))
             }
@@ -395,6 +395,15 @@ extension FunctionExpression {
 
         let signature = FunctionSignatureSyntax { builder in
             builder.useInput(inputSyntax)
+
+            if returnType != "Void" {
+                let returnClause = ReturnClauseSyntax { builder in
+                    builder.useArrow(SyntaxFactory.makeArrowToken(leadingTrivia: .spaces(1), trailingTrivia: .spaces(1)))
+                    builder.useReturnType(SyntaxFactory.makeTypeIdentifier(returnType))
+                }
+
+                builder.useOutput(returnClause)
+            }
         }
 
         var functionCallArguments = ""
@@ -420,7 +429,7 @@ extension FunctionExpression {
         }
 
         let codeBlock = CodeBlockSyntax { builder in
-            builder.useLeftBrace(SyntaxFactory.makeLeftBraceToken(trailingTrivia: .newlines(1)))
+            builder.useLeftBrace(SyntaxFactory.makeLeftBraceToken(leadingTrivia: .spaces(1), trailingTrivia: .newlines(1)))
             builder.useRightBrace(SyntaxFactory.makeRightBraceToken(leadingTrivia: .spaces(4), trailingTrivia: .newlines(1)))
             builder.addCodeBlockItem(blockItem)
 
