@@ -22,6 +22,11 @@ struct GenerateMockCommand: CommandProtocol {
 
         do {
             let parsed = try protocolParser.parse()
+            let generator = MockGenerator()
+
+            for each in generator.generateMock(for: parsed) {
+                print(each)
+            }
             try Path(options.outputPath).write(Data("Hello world".utf8))
         } catch let error {
             print(error)
@@ -251,4 +256,139 @@ struct FunctionExpression {
 struct ArgumentExpression {
     let name: String
     let type: String
+}
+
+class MockGenerator {
+
+    func generateMock(for protocols: [ProtocolExpression]) -> [DeclSyntax] {
+        return protocols.filter { $0.conformances.contains("Mocking") }.map(generateMock)
+    }
+
+    private func generateMock(for proto: ProtocolExpression) -> DeclSyntax {
+        let classKeyword = SyntaxFactory.makeClassKeyword(trailingTrivia: .spaces(1))
+        let className = SyntaxFactory.makeIdentifier(proto.name + "Mock", trailingTrivia: .spaces(1))
+
+        let classMembers = MemberDeclBlockSyntax { builder in
+            builder.useLeftBrace(SyntaxFactory.makeLeftBraceToken(trailingTrivia: .newlines(2)))
+            proto.functions.forEach { builder.addDecl($0.propertyCallSyntax) }
+            proto.functions.forEach { builder.addDecl($0.functionSyntax) }
+            builder.useRightBrace(SyntaxFactory.makeRightBraceToken(leadingTrivia: .newlines(1), trailingTrivia: .newlines(1)))
+        }
+
+        return ClassDeclSyntax { builder in
+            builder.useClassKeyword(classKeyword)
+            builder.useIdentifier(className)
+            builder.useMembers(classMembers)
+        }
+    }
+
+}
+
+extension ArgumentExpression {
+
+    func syntax(isLast: Bool) -> FunctionParameterSyntax {
+        return FunctionParameterSyntax { builder in
+            builder.useFirstName(SyntaxFactory.makeIdentifier(name))
+            builder.useColon(SyntaxFactory.makeColonToken(trailingTrivia: .spaces(1)))
+            builder.useType(SyntaxFactory.makeTypeIdentifier(type))
+            if !isLast {
+                builder.useTrailingComma(SyntaxFactory.makeCommaToken(trailingTrivia: .spaces(1)))
+            }
+        }
+    }
+
+}
+
+extension FunctionExpression {
+
+    var propertyCallSyntax: VariableDeclSyntax {
+        var propertyType = ""
+
+        if let argument = arguments.first, arguments.count == 1 {
+            propertyType = argument.type
+        } else {
+            propertyType = "(" + arguments.map { argument in
+                "\(argument.name): \(argument.type)"
+            }.joined(separator: ", ") + ")"
+        }
+
+        let tokens = SyntaxFactory.makeTokenList([
+            SyntaxFactory.makeLeftParenToken(),
+            SyntaxFactory.makeIdentifier("set"),
+            SyntaxFactory.makeRightParenToken(trailingTrivia: .spaces(1))
+        ])
+
+        let modifiers = SyntaxFactory.makeDeclModifier(
+            name: SyntaxFactory.makePrivateKeyword(leadingTrivia: .spaces(4)),
+            detail: tokens
+        )
+
+        let identifier = SyntaxFactory.makeIdentifierPattern(
+            identifier: SyntaxFactory.makeIdentifier(name + "Invoked", leadingTrivia: .spaces(1))
+        )
+
+        let type = SyntaxFactory.makeTypeAnnotation(
+            colon: SyntaxFactory.makeColonToken(),
+            type: SyntaxFactory.makeTypeIdentifier("\(propertyType)?", leadingTrivia: .spaces(1), trailingTrivia: .newlines(1))
+        )
+
+        let patternBinding = SyntaxFactory.makePatternBinding(
+            pattern: identifier,
+            typeAnnotation: type,
+            initializer: nil,
+            accessor: nil,
+            trailingComma: nil
+        )
+
+        return SyntaxFactory.makeVariableDecl(
+            attributes: nil,
+            modifiers: SyntaxFactory.makeModifierList([modifiers]),
+            letOrVarKeyword: SyntaxFactory.makeVarKeyword(),
+            bindings: SyntaxFactory.makePatternBindingList([patternBinding])
+        )
+    }
+
+    var functionSyntax: FunctionDeclSyntax {
+        let inputSyntax = ParameterClauseSyntax { builder in
+            builder.useLeftParen(SyntaxFactory.makeLeftParenToken())
+            builder.useRightParen(SyntaxFactory.makeRightParenToken(trailingTrivia: .spaces(1)))
+            arguments.enumerated().forEach { offset, argument in
+                builder.addFunctionParameter(argument.syntax(isLast: offset == arguments.count - 1))
+            }
+        }
+
+        let signature = FunctionSignatureSyntax { builder in
+            builder.useInput(inputSyntax)
+        }
+
+        var functionCallArguments = ""
+
+        if let argument = arguments.first, arguments.count == 1 {
+            functionCallArguments = argument.name
+        } else {
+            functionCallArguments = "(" + arguments.map { "\($0.name): \($0.name)" }.joined(separator: ", ") + ")"
+        }
+
+        let functionCallBlock = "\(name)Invoked = \(functionCallArguments)"
+
+        let blockItem = CodeBlockItemSyntax { builder in
+            builder.useItem(SyntaxFactory.makeUnknown(functionCallBlock, leadingTrivia: .spaces(8), trailingTrivia: .newlines(1)))
+        }
+
+        let codeBlock = CodeBlockSyntax { builder in
+            builder.useLeftBrace(SyntaxFactory.makeLeftBraceToken(trailingTrivia: .newlines(1)))
+            builder.useRightBrace(SyntaxFactory.makeRightBraceToken(leadingTrivia: .spaces(4), trailingTrivia: .newlines(1)))
+            builder.addCodeBlockItem(blockItem)
+        }
+
+        let functionDeclaration = FunctionDeclSyntax { builder in
+            builder.useFuncKeyword(SyntaxFactory.makeFuncKeyword(leadingTrivia: [.newlines(1), .spaces(4)], trailingTrivia: .spaces(1)))
+            builder.useIdentifier(SyntaxFactory.makeIdentifier(name))
+            builder.useBody(codeBlock)
+            builder.useSignature(signature)
+        }
+
+        return functionDeclaration
+    }
+
 }
