@@ -40,7 +40,7 @@ class TokenVisitor: SyntaxVisitor {
 
     override func visit(_ token: TokenSyntax) {
         switch token.tokenKind {
-        case .classKeyword, .extensionKeyword:
+        case .classKeyword, .extensionKeyword, .protocolKeyword:
             nextIdentifierType = token.text
         case let .identifier(identifier):
             if let identifierType = nextIdentifierType {
